@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace RealAntennas.Network
 {
-    [KSPScenario(ScenarioCreationOptions.AddToAllGames | ScenarioCreationOptions.AddToAllMissionGames, new GameScenes[] { GameScenes.MAINMENU })]
+    [KSPScenario(ScenarioCreationOptions.AddToAllGames, new GameScenes[] { GameScenes.MAINMENU })]
     public class CommNetPatcher : ScenarioModule
     {
         protected static readonly string ModTag = "[CommNetPatcher] ";

@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace RealAntennas
 {
-    [KSPScenario(ScenarioCreationOptions.AddToAllGames | ScenarioCreationOptions.AddToAllMissionGames, new GameScenes[] { GameScenes.FLIGHT, GameScenes.TRACKSTATION, GameScenes.SPACECENTER, GameScenes.EDITOR })]
+    [KSPScenario(ScenarioCreationOptions.AddToAllGames, new GameScenes[] { GameScenes.FLIGHT, GameScenes.TRACKSTATION, GameScenes.SPACECENTER, GameScenes.EDITOR })]
     public class RACommNetScenario : CommNetScenario
     {
         protected static readonly string ModTag = "[RealAntennasCommNetScenario] ";

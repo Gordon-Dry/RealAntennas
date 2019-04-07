@@ -16,7 +16,8 @@ namespace RealAntennas
             double lon = double.Parse(node.GetValue("Longitude"));
             double alt = double.Parse(node.GetValue("Height"));
             Vector3d vec = body.GetWorldSurfacePosition(lat, lon, alt);
-            transform.SetPositionAndRotation(vec, Quaternion.identity);
+            transform.position = vec;
+            transform.rotation = Quaternion.identity;
             transform.SetParent(body.transform);
         }
 
@@ -26,7 +27,6 @@ namespace RealAntennas
             name = node.GetValue("name");
             displaynodeName = name;
             isKSC = true;
-            isPermanent = true;
             config = node;
             SetTransformFromConfig(config, body);
         }
@@ -44,7 +44,7 @@ namespace RealAntennas
             }
             comm.name = nodeName;
             comm.displayName = displaynodeName;
-            comm.antennaRelay.Update(!isPermanent ? GameVariables.Instance.GetDSNRange(ScenarioUpgradeableFacilities.GetFacilityLevel(SpaceCenterFacility.TrackingStation)) : antennaPower, GameVariables.Instance.GetDSNRangeCurve(), false);
+            comm.antennaRelay.Update(GameVariables.Instance.GetDSNRange(ScenarioUpgradeableFacilities.GetFacilityLevel(SpaceCenterFacility.TrackingStation)), GameVariables.Instance.GetDSNRangeCurve(), false);
             Vector3d pos = (nodeTransform == null) ? transform.position : nodeTransform.position;
             body.GetLatLonAlt(pos, out lat, out lon, out alt);
 

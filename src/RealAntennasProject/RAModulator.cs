@@ -20,14 +20,12 @@ namespace RealAntennas
         // Actually, let's just skip to digital land and specify required C/I (Es/No) as a function of modulation.
         // And derive bandwidth as a function of the symbol rate and the spectral efficiency.
 
-        // QPSK: 7-10.  16-QAM: 15-18.  64-QAM: 22-24.  256-QAM: 28-30dB Minimums
-        // These values are for a symbol error rate of 10^-2 (ouch!)
-        // Probably should shift to 6, 10, 14, 18, 21, 23.5, 27, 29, 31
+        // Use 6, 10, 14, 18, 21, 23.5, 27, 29, 31 for 1e-6 pErr
+        //     , BPSK, QPSK, 8PSK, 16QAM, 32QAM, 64QAM, 128QAM, 256QAM
         public readonly double[] QAM_CI = { 6, 10, 14, 18, 21, 23.5, 27, 29, 31 };
         public virtual double RequiredCI() => RequiredCI(ModulationBits);
         public virtual double RequiredCI(int modulationBits)
         {
-            // OOK: 2, BPSK: 5, QPSK: 8, 8PSK: 11, 16QAM: 16, 32QAM: 19, 64QAM: 22
             if (modulationBits < QAM_CI.Length) return QAM_CI[modulationBits];
             return QAM_CI[QAM_CI.Length - 1];
         }

@@ -77,7 +77,7 @@ namespace RealAntennas
                 Part part = protoPartSnapshot.partInfo.partPrefab;
                 foreach (PartModule module in part.Modules)
                 {
-                    if ((module is CommNet.ModuleProbeControlPoint probeControlPoint) && probeControlPoint.CanControlUnloaded(protoPartSnapshot.FindModule(module, index)))
+                    if (module is CommNet.ModuleProbeControlPoint probeControlPoint)
                     {
                         if (numControl >= probeControlPoint.minimumCrew || probeControlPoint.minimumCrew <= 0)
                             comm.isControlSource = true;
@@ -94,7 +94,7 @@ namespace RealAntennas
             {
                 foreach (PartModule module in part.Modules)
                 {
-                    if ((module is CommNet.ModuleProbeControlPoint probeControlPoint) && probeControlPoint.CanControl())
+                    if (module is CommNet.ModuleProbeControlPoint probeControlPoint)
                     {
                         if (numControl >= probeControlPoint.minimumCrew || probeControlPoint.minimumCrew <= 0)
                             comm.isControlSource = true;
@@ -119,6 +119,7 @@ namespace RealAntennas
             List<RealAntenna> l = new List<RealAntenna>();
             foreach (ModuleRealAntenna ant in src)
             {
+                ant.RAAntenna.ParentNode = Comm;
                 l.Add(ant.RAAntenna);
             }
             return l;
