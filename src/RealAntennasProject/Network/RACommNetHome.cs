@@ -10,6 +10,8 @@ namespace RealAntennas.Network
         protected static readonly string ModTag = "[RealAntennasCommNetHome] ";
         protected ConfigNode config = null;
         private readonly double DriftTolerance = 10000.0;
+        public string icon = "radio-antenna";
+        public RACommNode Comm => comm as RACommNode;
 
         public void SetTransformFromLatLonAlt(double lat, double lon, double alt, CelestialBody body)
         {
@@ -29,6 +31,7 @@ namespace RealAntennas.Network
             lat = double.Parse(node.GetValue("lat"));
             lon = double.Parse(node.GetValue("lon"));
             alt = double.Parse(node.GetValue("alt"));
+            node.TryGetValue("icon", ref icon);
             SetTransformFromLatLonAlt(lat, lon, alt, body);
         }
         protected override void CreateNode()
@@ -51,11 +54,8 @@ namespace RealAntennas.Network
 
             RACommNode t = comm as RACommNode;
             t.ParentBody = body;
-            int maxTL = HighLogic.CurrentGame.Parameters.CustomParams<RAParameters>().MaxTechLevel;
-            float fTSLvl = ScenarioUpgradeableFacilities.GetFacilityLevel(SpaceCenterFacility.TrackingStation);
-            int tsLevel = (HighLogic.CurrentGame.Mode == Game.Modes.CAREER) ? Convert.ToInt32(1 + (fTSLvl * maxTL)) : maxTL;
+            int tsLevel = RACommNetScenario.GroundStationTechLevel;
             // Config node contains a list of antennas to build.
-            //Debug.LogFormat("Building all antennas for tech level {0} from {1}", tsLevel, config);
             t.RAAntennaList = new List<RealAntenna> { };
             foreach (ConfigNode antNode in config.GetNodes("Antenna")) 
             {
@@ -68,10 +68,6 @@ namespace RealAntennas.Network
                     ant.ProcessUpgrades(tsLevel, antNode);
                     ant.TechLevelInfo = TechLevelInfo.GetTechLevel(tsLevel);
                     t.RAAntennaList.Add(ant);
-                }
-                else
-                {
-                    //Debug.LogFormat("Skipped because current techLevel {0} is less than required {1}", tsLevel, targetLevel);
                 }
             }
         }
