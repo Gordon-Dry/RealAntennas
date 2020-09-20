@@ -10,14 +10,13 @@ namespace RealAntennas.Kerbalism
         public static Assembly KerbalismAssembly = null;
         public static void RAKerbalismLinkHandler(object p1, Vessel v)
         {
-            if (v.Connection is RACommNetVessel raCNV && raCNV.Comm is RACommNode node)
+            if (CommNet.CommNetScenario.CommNetEnabled && v.Connection is RACommNetVessel raCNV && raCNV.Comm is RACommNode node)
             {
-                double ec=0,rate = 0, strength = 0, packetInterval = 1.0f;
-                double ecIdle = v.loaded ? 0 : raCNV.UnloadedPowerDraw();
-                ec = ecIdle;
+                bool powered = (bool)p1.GetType().GetField("powered").GetValue(p1);
+                bool transmitting = (bool)p1.GetType().GetField("transmitting").GetValue(p1);
+                double ecIdle = powered ? raCNV.IdlePowerDraw() : 0;
+                double ec = ecIdle, rate = 0, strength = 0, packetInterval = 1.0f;
                 int status = 2;
-                bool powered = (bool) p1.GetType().GetField("powered").GetValue(p1);
-                bool transmitting = (bool) p1.GetType().GetField("transmitting").GetValue(p1);
                 string target_name = "NotConnected";
                 List<string[]> sList = new List<string[]>();
                 if (!v.loaded) raCNV.powered = powered;
@@ -26,7 +25,7 @@ namespace RealAntennas.Kerbalism
                     CommNet.CommPath path = new CommNet.CommPath();
                     (node.Net as RACommNetwork).FindHome(node, path);
                     status = !raCNV.IsConnectedHome ? 2 : path.Count == 1 ? 0 : 1;
-                    rate = (node.Net as RACommNetwork).MaxDataRateToHome(node) / (8 * 1024 * 1024);    // Convert rate from bps to MBps;
+                    rate = (node.Net as RACommNetwork).MaxDataRateToHome(node) / 8e6;    // Convert rate from bps to MBps;
                     if (transmitting) ec += ra.PowerDrawLinear * packetInterval * 1e-6;    // 1 EC/sec = 1KW.  Draw(mw) * interval(sec) * mW -> kW conversion
                     if (node[path.First.end] is RACommLink link)
                     {

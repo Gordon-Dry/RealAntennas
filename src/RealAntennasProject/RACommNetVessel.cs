@@ -2,13 +2,12 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using UnityEngine;
 
 namespace RealAntennas
 {
     public class RACommNetVessel : CommNet.CommNetVessel
     {
-        protected static readonly string ModTag = "[RealAntennasCommNetVessel] ";
+        protected const string ModTag = "[RealAntennasCommNetVessel]";
         readonly List<RealAntenna> antennaList = new List<RealAntenna>();
         readonly List<RealAntenna> inactiveAntennas = new List<RealAntenna>();
         private EventData<Vessel>.OnEvent OnVesselModifiedEvent = null;
@@ -16,8 +15,7 @@ namespace RealAntennas
         public override IScienceDataTransmitter GetBestTransmitter() =>
             (IsConnected && Comm is RACommNode node && node.AntennaTowardsHome() is RealAntenna toHome) ? toHome.Parent : null;
 
-        [KSPField(isPersistant = true)]
-        public bool powered = true;
+        [KSPField(isPersistant = true)] public bool powered = true;
 
         public override void OnNetworkPreUpdate()
         {
@@ -29,17 +27,16 @@ namespace RealAntennas
             }
         }
 
-        public double UnloadedPowerDraw()
+        public double IdlePowerDraw()
         {
             double ec = 0;
             foreach (RealAntenna ra in antennaList)
             {
-                ec += ra.PowerDrawLinear * 1e-6 * ModuleRealAntenna.InactivePowerConsumptionMult;  // mW->kW conversion 1e-6, Standby power SWAG 10%
+                ec += ra.IdlePowerDraw;
             }
             foreach (RealAntenna ra in inactiveAntennas)
             {
-                ec += ra.PowerDrawLinear * 1e-6 * ModuleRealAntenna.InactivePowerConsumptionMult;  // mW->kW conversion 1e-6, Standby power SWAG 10%
-
+                ec += ra.IdlePowerDraw;
             }
             return ec;
         }
@@ -66,20 +63,19 @@ namespace RealAntennas
                 networkInitialised = false;
                 if (CommNet.CommNetNetwork.Initialized)
                     OnNetworkInitialized();
-                GameEvents.CommNet.OnNetworkInitialized.Add(new EventVoid.OnEvent(OnNetworkInitialized));
+                GameEvents.CommNet.OnNetworkInitialized.Add(OnNetworkInitialized);
                 if (HighLogic.LoadedScene == GameScenes.TRACKSTATION)
-                    GameEvents.onPlanetariumTargetChanged.Add(new EventData<MapObject>.OnEvent(OnMapFocusChange));
+                    GameEvents.onPlanetariumTargetChanged.Add(OnMapFocusChange);
             }
-            Debug.LogFormat(ModTag + "OnStart() for {0}. ID:{1}.  Comm:{2}", name, gameObject.GetInstanceID(), Comm);
             if (OnVesselModifiedEvent == null)
             {
-                OnVesselModifiedEvent = new EventData<Vessel>.OnEvent(OnVesselModified);
+                OnVesselModifiedEvent = OnVesselModified;
                 GameEvents.onVesselWasModified.Add(OnVesselModifiedEvent);
             }
             foreach (ModuleDeployablePart mdp in Vessel.FindPartModulesImplementing<ModuleDeployablePart>())
             {
-                mdp.OnMoving.Add(new EventData<float, float>.OnEvent(OnMoving));
-                mdp.OnStop.Add(new EventData<float>.OnEvent(OnStop));
+                mdp.OnMoving.Add(OnMoving);
+                mdp.OnStop.Add(OnStop);
             }
             this.overridePostUpdate = true;
             electricChargeDef = PartResourceLibrary.Instance.GetDefinition("ElectricCharge");
@@ -96,10 +92,8 @@ namespace RealAntennas
 
         protected override void UpdateComm()
         {
-            if (comm.name != gameObject.name)
-                comm.name = gameObject.name;
-            if (comm.displayName != vessel.GetDisplayName())
-                comm.displayName = vessel.GetDisplayName();
+            comm.name = gameObject.name;
+            comm.displayName = vessel.GetDisplayName();
             comm.isControlSource = false;
             comm.isControlSourceMultiHop = false;
             comm.antennaRelay.power = comm.antennaTransmit.power = 0.0;
@@ -183,14 +177,14 @@ namespace RealAntennas
             {
                 foreach (ProtoPartSnapshot part in Vessel.protoVessel.protoPartSnapshots)
                 {
-                    if (part.FindModule(ModuleRealAntenna.ModuleName) is ProtoPartModuleSnapshot snap)
+                    foreach (ProtoPartModuleSnapshot snap in part.modules.Where(x => x.moduleName == ModuleRealAntenna.ModuleName))
                     {
                         bool _enabled = true;
                         snap.moduleValues.TryGetValue(nameof(ModuleRealAntenna._enabled), ref _enabled);
-                        Part prefab = part.partInfo.partPrefab;
-                        if (_enabled && prefab.FindModuleImplementing<ModuleRealAntenna>() is ModuleRealAntenna mra && mra.CanCommUnloaded(snap))
+                        // Doesn't get the correct PartModule if multiple, but the only impact is the name, which defaults to the part anyway.
+                        if (_enabled && part.partInfo.partPrefab.FindModuleImplementing<ModuleRealAntenna>() is ModuleRealAntenna mra && mra.CanCommUnloaded(snap))
                         {
-                            RealAntenna ra = new RealAntennaDigital(mra.name) { ParentNode = Comm };
+                            RealAntenna ra = new RealAntennaDigital(mra.name) { ParentNode = Comm, ParentSnapshot = snap };
                             ra.LoadFromConfigNode(snap.moduleValues);
                             if (DeployedUnloaded(part)) antennaList.Add(ra);
                             else inactiveAntennas.Add(ra);

@@ -6,17 +6,15 @@ namespace RealAntennas.Network
     [KSPScenario(ScenarioCreationOptions.AddToAllGames | ScenarioCreationOptions.AddToAllMissionGames, new GameScenes[] { GameScenes.MAINMENU })]
     public class CommNetPatcher : ScenarioModule
     {
-        protected static readonly string ModTag = "[CommNetPatcher]";
+        private const string ModTag = "[CommNetPatcher]";
         public override void OnAwake()
         {
-            Debug.LogFormat($"{ModTag} Started");
-            if (GetCommNetScenarioModule() is ProtoScenarioModule psm)
+            Debug.Log($"{ModTag} Started");
+            VesselModuleManager.RemoveModuleOfType(typeof(CommNet.CommNetVessel));
+            if (GetCommNetScenarioModule() is ProtoScenarioModule psm && !CommNetPatched(psm))
             {
-                if (!CommNetPatched(psm))
-                {
-                    Debug.LogFormat($"{ClassName} Patching out CommNetScenario");
-                    UnloadCommNet(psm);
-                }
+                Debug.Log($"{ClassName} Patching out CommNetScenario");
+                UnloadCommNet(psm);
             }
         }
 
@@ -35,8 +33,8 @@ namespace RealAntennas.Network
         internal static bool CommNetPatched(ProtoScenarioModule psm) => psm != null ? psm.targetScenes.Contains(GameScenes.CREDITS) : false;
         internal static void UnloadCommNet(ProtoScenarioModule psm = null)
         {
-            Debug.LogFormat($"{ModTag} Patching CommNet's TargetScenes");
-            if (psm == null) psm = GetCommNetScenarioModule();
+            Debug.Log($"{ModTag} Patching CommNet's TargetScenes");
+            psm ??= GetCommNetScenarioModule();
             if (psm != null) psm.SetTargetScenes(new GameScenes[] { GameScenes.CREDITS });
         }
     }
