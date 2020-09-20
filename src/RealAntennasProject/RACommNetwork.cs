@@ -1,6 +1,7 @@
 ﻿using CommNet;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 using UnityEngine.Profiling;
 
@@ -8,24 +9,23 @@ namespace RealAntennas
 {
     public class RACommNetwork : CommNetwork
     {
-        protected static readonly string ModTag = "[RealAntennasCommNetwork] ";
-        protected static readonly string ModTrace = ModTag + "[Trace] ";
+        protected static readonly string ModTag = "[RealAntennasCommNetwork]";
 
-        private readonly float updatePeriod = 60.0f;
         private float lastRun = 0f;
+        private readonly System.Diagnostics.Stopwatch RebuildStopWatch = new System.Diagnostics.Stopwatch();
 
-        private RealAntenna[] bestFwdAntPair = new RealAntenna[2];
-        private RealAntenna[] bestRevAntPair = new RealAntenna[2];
+        private readonly RealAntenna[] bestFwdAntPair = new RealAntenna[2];
+        private readonly RealAntenna[] bestRevAntPair = new RealAntenna[2];
         public List<CommNode> Nodes { get => nodes; }
 
         public override CommNode Add(CommNode conn)
         {
             if (!(conn is RACommNode c))
             {
-                Debug.LogWarningFormat(ModTag + "Wrong commnode type, so ignoring.");
+                Debug.LogWarning($"{ModTag} Wrong commnode type, so ignoring.");
                 return conn;
             }
-            Debug.LogFormat(ModTag + "Adding {0}", c.DebugToString());
+            Debug.Log($"{ModTag} Adding {c.DebugToString()}");
             return base.Add(conn);
         }
         protected override bool SetNodeConnection(CommNode a, CommNode b)
@@ -56,7 +56,7 @@ namespace RealAntennas
         {
             if ((!(a is RACommNode rac_a)) || (!(b is RACommNode rac_b)))
             {
-                Debug.LogErrorFormat(ModTag + "TryConnect() but a({0}) or b({1}) null or not RACommNode!", a, b);
+                Debug.LogError($"{ModTag} TryConnect() but a({a}) or b({b}) null or not RACommNode!");
                 return base.TryConnect(a, b, distance, aCanRelay, bCanRelay, bothRelay);
             }
             if (!rac_a.CanComm() || !rac_b.CanComm())
@@ -116,7 +116,7 @@ namespace RealAntennas
 
             if (Convert.ToSingle(FwdBestDataRate / FwdDataRate) < 1.0)
             {
-                Debug.LogWarningFormat($"{ModTag} Detected actual rate {FwdDataRate} greater than expected max {FwdBestDataRate} for antennas {link.FwdAntennaTx} and {link.FwdAntennaRx}");
+                Debug.LogWarning($"{ModTag} Detected actual rate {FwdDataRate} greater than expected max {FwdBestDataRate} for antennas {link.FwdAntennaTx} and {link.FwdAntennaRx}");
             }
 
             link.FwdMetric = 1 - (FwdRateSteps / (FwdMaxSymSteps + FwdMaxModSteps + 1));
@@ -171,7 +171,7 @@ namespace RealAntennas
 
         private bool TimeToValidate()
         {
-            bool res = Time.timeSinceLevelLoad > lastRun + updatePeriod;
+            bool res = RACommNetScenario.debugWalkLogging && (Time.timeSinceLevelLoad > lastRun + RACommNetScenario.debugWalkInterval);
             if (res) lastRun = Time.timeSinceLevelLoad;
             return res;
         }
@@ -197,19 +197,27 @@ namespace RealAntennas
             return data_rate;
         }
 
+        private bool IsPaused => (KSCPauseMenu.Instance && KSCPauseMenu.Instance.enabled) || (PauseMenu.exists && PauseMenu.isOpen);
         public override void Rebuild()
         {
-            Profiler.BeginSample("RealAntennas CommNetwork Rebuild");
-            base.Rebuild();
-            Profiler.EndSample();
+            if (!IsPaused)
+            {
+                Profiler.BeginSample("RealAntennas CommNetwork Rebuild");
+                RebuildStopWatch.Reset();
+                RebuildStopWatch.Start();
+                base.Rebuild();
+                RebuildStopWatch.Stop();
+                Profiler.EndSample();
+                (RACommNetScenario.Instance as RACommNetScenario).metrics.AddMeasurement("Rebuild", RebuildStopWatch.ElapsedMilliseconds);
+            }
         }
 
         protected string CommNodeWalk()
         {
-            string res = string.Format(ModTag + "CommNode walk\n");
+            string res = $"{ModTag} CommNode walk\n";
             foreach (RACommNode item in nodes)
             {
-                res += string.Format(ModTag + "{0}\n", item.DebugToString());
+                res += $"{item.DebugToString()}\n";
             }
             return res;
         }
@@ -224,25 +232,24 @@ namespace RealAntennas
 
         protected string CommLinkWalk()
         {
-            string res = string.Format(ModTag + "CommLink walk\n");
+            string res = $"{ModTag} CommLink walk\n";
             foreach (CommLink item in Links)
             {
-                res += string.Format(ModTrace + "{0}\n", item);
-                //                    res += string.Format(ModTag + "{0}\n", RealAntennasTools.DumpLink(item));
+                res += $"{item}\n";
             }
             return res;
         }
 
         public void ValidateNodes()
         {
-            Debug.Log(RATools.VesselWalk(this, ModTag));
+            //Debug.Log(RATools.VesselWalk(this, ModTag));
             foreach (Vessel v in FlightGlobals.Vessels)
             {
                 if (v.Connection is RACommNetVessel cnv)
                 {
                     if ((cnv.Comm is RACommNode vcn) && (!nodes.Contains(vcn)))
                     {
-                        Debug.LogWarningFormat(ModTag + "Vessel {0} had commnode {1} not in the node list.", v, vcn);
+                        Debug.LogWarning($"{ModTag} Vessel {v} had commnode {vcn} not in the node list.");
                         Add(vcn);
                     }
                 }
@@ -250,6 +257,74 @@ namespace RealAntennas
             CheckNodeConsistency();
             Debug.Log(CommNodeWalk());
             Debug.Log(CommLinkWalk());
+        }
+
+        /*
+        public override bool FindPath(CommNode start, CommPath path, CommNode end)
+        {
+            return base.FindPath(start, path, end);
+        }
+        */
+
+        private HashSet<RACommNode> sptSet = new HashSet<RACommNode>();
+        private List<RACommNode> pathSortList = new List<RACommNode>();
+        public override CommNode FindClosestWhere(CommNode cnStart, CommPath path, Func<CommNode, CommNode, bool> where)
+        {
+            if (!(cnStart is RACommNode start && where != null))
+                return base.FindClosestWhere(cnStart, path, where);
+            Profiler.BeginSample("RealAntennas.FindClosestWhere");
+            path?.Clear();
+            sptSet.Clear();
+            pathSortList.Clear();
+            foreach (RACommNode racn in Nodes)
+            {
+                racn.bestCost = (racn == start) ? 0 : double.PositiveInfinity;
+                racn.bestLink = null;
+                racn.bestLinkNode = null;
+            }
+            pathSortList.Add(start);
+            bool found = false;
+            RACommNode candidate = null;
+            while (!found && pathSortList.Count > 0)
+            {
+                pathSortList.Sort((x, y) => x.bestCost.CompareTo(y.bestCost));
+                candidate = pathSortList.First();
+                pathSortList.RemoveAt(0);
+                sptSet.Add(candidate);
+                if (!(found = where(start, candidate)))
+                {
+                    foreach (KeyValuePair<CommNode, CommLink> kvp in candidate)
+                    {
+                        if (kvp.Key is RACommNode node && kvp.Value is RACommLink link && !sptSet.Contains(node))
+                        {
+                            double cost = link.start == candidate ? link.FwdCost : link.RevCost;
+                            if (node.bestCost > candidate.bestCost + cost)
+                            {
+                                node.bestCost = candidate.bestCost + cost;
+                                node.bestLink = link;
+                                node.bestLinkNode = candidate;
+                            }
+                            pathSortList.AddUnique(node);
+                        }
+                    }
+                }
+            }
+            if (found)
+            {
+                CommNode n = candidate;
+                while (n is RACommNode && n != start)
+                {
+                    var link = new RACommLink();
+                    link.Copy(n.bestLink as RACommLink);
+                    if (link.a == n)
+                        link.SwapEnds();
+                    path?.Insert(0, link);
+                    n = n.bestLinkNode as RACommNode;
+                }
+                path?.UpdateFromPath();
+            }
+            Profiler.EndSample();
+            return found ? candidate : null;
         }
     }
 }

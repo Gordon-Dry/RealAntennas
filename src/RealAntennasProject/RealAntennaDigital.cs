@@ -33,18 +33,25 @@ namespace RealAntennas
         private bool BestPeerModulator(RealAntenna rx, out double modRate, out double codeRate)
         {
             RealAntennaDigital tx = this;
-            Antenna.Encoder encoder = Antenna.Encoder.BestMatching(tx.Encoder, rx.Encoder);
-            codeRate = encoder.CodingRate;
             modRate = 0;
+            codeRate = 0;
             if (!(rx is RealAntennaDigital)) return false;
             if (!Compatible(rx)) return false;
             if ((tx.Parent is ModuleRealAntenna) && !tx.Parent.CanComm()) return false;
             if ((rx.Parent is ModuleRealAntenna) && !rx.Parent.CanComm()) return false;
+            if (!(tx.DirectionCheck(rx) && rx.DirectionCheck(tx))) return false;
 
-            Vector3 toSource = rx.Position - tx.Position;
+            Antenna.Encoder encoder = Antenna.Encoder.BestMatching(tx.Encoder, rx.Encoder);
+            codeRate = encoder.CodingRate;
+            Vector3d toSource = rx.Position - tx.Position;
             double distance = toSource.magnitude;
             RAModulator txMod = tx.modulator, rxMod = (rx as RealAntennaDigital).modulator;
             if ((distance < tx.MinimumDistance) || (distance < rx.MinimumDistance)) return false;
+            if (distance < 0.1f)
+            {
+                Debug.LogWarning($"{ModTag} Aborting calculation for {tx} and {rx}: Distance < 0.1");
+                return false;
+            }
             if (!txMod.Compatible(rxMod)) return false;
             int maxBits = Math.Min(txMod.ModulationBits, rxMod.ModulationBits);
             double maxSymbolRate = Math.Min(txMod.SymbolRate, rxMod.SymbolRate);
@@ -92,7 +99,7 @@ namespace RealAntennas
                 double d = 1 + Math.Floor(margin / 3);
                 if (d < Int32.MinValue || d > Int32.MaxValue)
                 {
-                    Debug.LogError($"{ModTag} Max bits {d} OUT OF RANGE of Int32 for Tx: {tx} Rx: {rx} N0: {N0} MaxSymbolRate: {maxSymbolRate} Noise: {Noise} RxP: {RxPower} CI: {CI} Encoder: {encoder} margin: {margin}");
+                    Debug.LogError($"{ModTag} Max bits {d} OUT OF RANGE of Int32 for Tx: {tx} Rx: {rx} N0: {N0} MaxSymbolRate: {maxSymbolRate} Noise: {Noise} RxP: {RxPower} CI: {CI} Encoder: {encoder} margin: {margin} distance: {distance} freq: {tx.Frequency} txNode: {tx.ParentNode} rxNode: {rx.ParentNode}");
                     negotiatedBits = 1;
                 } else
                 {

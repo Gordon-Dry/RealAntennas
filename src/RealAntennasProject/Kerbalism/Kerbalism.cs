@@ -1,8 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using UnityEngine;
 using System.Reflection;
 
 namespace RealAntennas.Kerbalism
@@ -11,15 +8,15 @@ namespace RealAntennas.Kerbalism
     {
         public static readonly string ModTag = "[RAKerbalismLink] ";
         public static Assembly KerbalismAssembly = null;
-        public static void MyCommHandler(object p1, Vessel v)
+        public static void RAKerbalismLinkHandler(object p1, Vessel v)
         {
-            if (v.Connection is RACommNetVessel raCNV && raCNV.Comm is RACommNode node)
+            if (CommNet.CommNetScenario.CommNetEnabled && v.Connection is RACommNetVessel raCNV && raCNV.Comm is RACommNode node)
             {
-                double rate = 0, strength = 0, packetInterval = 1.0f;
-                double ec = v.loaded ? 0 : raCNV.UnloadedPowerDraw();   // If loaded, individual modules will consume power
+                bool powered = (bool)p1.GetType().GetField("powered").GetValue(p1);
+                bool transmitting = (bool)p1.GetType().GetField("transmitting").GetValue(p1);
+                double ecIdle = powered ? raCNV.IdlePowerDraw() : 0;
+                double ec = ecIdle, rate = 0, strength = 0, packetInterval = 1.0f;
                 int status = 2;
-                bool powered = (bool) p1.GetType().GetField("powered").GetValue(p1);
-                bool transmitting = (bool) p1.GetType().GetField("transmitting").GetValue(p1);
                 string target_name = "NotConnected";
                 List<string[]> sList = new List<string[]>();
                 if (!v.loaded) raCNV.powered = powered;
@@ -28,7 +25,7 @@ namespace RealAntennas.Kerbalism
                     CommNet.CommPath path = new CommNet.CommPath();
                     (node.Net as RACommNetwork).FindHome(node, path);
                     status = !raCNV.IsConnectedHome ? 2 : path.Count == 1 ? 0 : 1;
-                    rate = (node.Net as RACommNetwork).MaxDataRateToHome(node) / (8 * 1024 * 1024);    // Convert rate from bps to MBps;
+                    rate = (node.Net as RACommNetwork).MaxDataRateToHome(node) / 8e6;    // Convert rate from bps to MBps;
                     if (transmitting) ec += ra.PowerDrawLinear * packetInterval * 1e-6;    // 1 EC/sec = 1KW.  Draw(mw) * interval(sec) * mW -> kW conversion
                     if (node[path.First.end] is RACommLink link)
                     {
@@ -49,6 +46,7 @@ namespace RealAntennas.Kerbalism
                 p1.GetType().GetField("strength").SetValue(p1, strength);   // Signal quality indicator (float 0..1)
                 p1.GetType().GetField("target_name").SetValue(p1, target_name);
                 p1.GetType().GetField("control_path").SetValue(p1, sList);
+                p1.GetType().GetField("ec_idle")?.SetValue(p1, ecIdle);
 
                 //Debug.LogFormat($"{ModTag}Rate: {RATools.PrettyPrintDataRate(rate * 8 * 1024 * 1024)} EC: {ec:F4}  Linked:{raCNV.IsConnectedHome}  Strength: {strength:F2}  Target: {target_name}");
             }
@@ -63,7 +61,7 @@ namespace RealAntennas.Kerbalism
                     )
                 {
                     KerbalismAssembly = a.assembly;
-                    MethodInfo baseMethod = typeof(Kerbalism).GetMethod("MyCommHandler");
+                    MethodInfo baseMethod = typeof(Kerbalism).GetMethod(nameof(RAKerbalismLinkHandler));
                     var x = baseMethod;
                     var fInf = KerbalismAPIType.GetField("Comm", BindingFlags.Public | BindingFlags.Static);
                     var val = fInf.GetValue(null);
